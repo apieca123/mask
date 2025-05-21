@@ -132,19 +132,48 @@ local function updateVersionLabel()
     versionLabel.Text = "Current PlaceVersion: " .. game.PlaceVersion
 end
 
--- Toggle button
+-- Variables for showing and hiding GUI
 local isVisible = true
+
+-- Hide the main GUI and create a small draggable button
+local smallButton = Instance.new("TextButton")
+smallButton.Size = UDim2.new(0, 50, 0, 50)
+smallButton.Position = UDim2.new(0.5, -25, 0.5, -25)
+smallButton.Text = "+"
+smallButton.BackgroundColor3 = Color3.fromRGB(60, 120, 200)
+smallButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+smallButton.Font = Enum.Font.SourceSansBold
+smallButton.TextSize = 30
+smallButton.Visible = false
+smallButton.Parent = screenGui
+
+-- Toggle button functionality
 toggleButton.MouseButton1Click:Connect(function()
+    if isVisible then
+        mainFrame.Visible = false
+        smallButton.Visible = true
+        toggleButton.Text = "Show Panel"
+    else
+        mainFrame.Visible = true
+        smallButton.Visible = false
+        toggleButton.Text = "Hide Panel"
+    end
     isVisible = not isVisible
-    hopButton.Visible = isVisible
-    toggleButton.Text = isVisible and "Hide Panel" or "Show Panel"
+end)
+
+-- Small button functionality to bring back the GUI
+smallButton.MouseButton1Click:Connect(function()
+    mainFrame.Visible = true
+    smallButton.Visible = false
+    toggleButton.Text = "Hide Panel"
+    isVisible = true
 end)
 
 closeButton.MouseButton1Click:Connect(function()
     screenGui:Destroy()
 end)
 
--- Server fetching logic
+-- Server fetching logic (updated to filter servers with 4 or fewer players and not full)
 local function getServerList()
     local servers = {}
     local nextPageCursor = ""
@@ -159,7 +188,8 @@ local function getServerList()
 
         if success and result and result.data then
             for _, server in ipairs(result.data) do
-                if server.id ~= game.JobId and not TriedServerIds[server.id] and server.playing < server.maxPlayers then
+                -- Ensure server is not the current one, has 4 or fewer players, and isn't full
+                if server.id ~= game.JobId and not TriedServerIds[server.id] and server.playing <= 4 and server.playing < server.maxPlayers then
                     table.insert(servers, server.id)
                 end
             end
@@ -173,13 +203,18 @@ local function getServerList()
     return servers
 end
 
--- Server hop
+-- Server hop with retry logic (join the first valid server found)
 local function hopToServer()
-    while true do
+    local retries = 0  -- To prevent infinite loops
+    local maxRetries = 5  -- Max retry attempts
+
+    while retries < maxRetries do
         local servers = getServerList()
+
         if #servers == 0 then
-            warn("❌ No servers available, retrying...")
-            task.wait(3)
+            warn("❌ No valid servers found, retrying...")
+            retries = retries + 1
+            task.wait(3)  -- Wait before retrying
         else
             for _, serverId in ipairs(servers) do
                 TriedServerIds[serverId] = true
@@ -189,13 +224,17 @@ local function hopToServer()
                         [TeleportDataKey] = true
                     })
                 end)
+
                 if not success then
                     warn("❌ Teleport failed:", err)
                 end
-                return
+                return  -- Exit after a successful teleport
             end
         end
     end
+
+    -- If max retries reached and no server is joined
+    warn("❌ Reached max retries. No servers found that meet the criteria.")
 end
 
 -- Hop button
