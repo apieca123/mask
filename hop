@@ -1,0 +1,231 @@
+local Players = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+local LocalPlayer = Players.LocalPlayer
+
+local MaxVersion = 1233
+local TriedServerIds = {}
+local PlaceId = game.PlaceId
+local TeleportDataKey = "serverHopData"
+
+-- Handle teleport return
+local teleportData = TeleportService:GetLocalPlayerTeleportData()
+if teleportData and teleportData[TeleportDataKey] then
+    if game.PlaceVersion <= MaxVersion then
+        print("✅ Joined server with PlaceVersion ≤ " .. MaxVersion .. ": " .. game.PlaceVersion)
+    else
+        warn("❌ Wrong version (" .. game.PlaceVersion .. "), hopping again...")
+        task.wait(1)
+    end
+end
+
+-- GUI Setup
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "ServerHopGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 320, 0, 160)
+mainFrame.Position = UDim2.new(0.5, -160, 0.5, -80)
+mainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+-- PlaceVersion Label
+local versionLabel = Instance.new("TextLabel")
+versionLabel.Size = UDim2.new(1, -10, 0, 20)
+versionLabel.Position = UDim2.new(0, 5, 0, 5)
+versionLabel.Text = "Current PlaceVersion: " .. game.PlaceVersion
+versionLabel.BackgroundTransparency = 1
+versionLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+versionLabel.Font = Enum.Font.SourceSansBold
+versionLabel.TextSize = 16
+versionLabel.TextXAlignment = Enum.TextXAlignment.Left
+versionLabel.Parent = mainFrame
+
+local hopButton = Instance.new("TextButton")
+hopButton.Size = UDim2.new(0, 260, 0, 50)
+hopButton.Position = UDim2.new(0.5, -130, 0.25, 0)
+hopButton.Text = "Hop to v1233 or Older"
+hopButton.BackgroundColor3 = Color3.fromRGB(60, 120, 200)
+hopButton.TextColor3 = Color3.new(1, 1, 1)
+hopButton.Font = Enum.Font.SourceSansBold
+hopButton.TextSize = 20
+hopButton.Parent = mainFrame
+
+local closeButton = Instance.new("TextButton")
+closeButton.Size = UDim2.new(0, 25, 0, 25)
+closeButton.Position = UDim2.new(1, -30, 0, 5)
+closeButton.Text = "X"
+closeButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+closeButton.TextColor3 = Color3.new(1, 1, 1)
+closeButton.Font = Enum.Font.SourceSansBold
+closeButton.TextSize = 14
+closeButton.Parent = mainFrame
+
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(0, 160, 0, 35)
+toggleButton.Position = UDim2.new(0, 10, 1, -45)
+toggleButton.Text = "Hide Panel"
+toggleButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+toggleButton.TextColor3 = Color3.new(1, 1, 1)
+toggleButton.Font = Enum.Font.SourceSans
+toggleButton.TextSize = 16
+toggleButton.Parent = mainFrame
+
+local creditLabel = Instance.new("TextLabel")
+creditLabel.Size = UDim2.new(1, -10, 0, 20)
+creditLabel.Position = UDim2.new(0, 5, 1, -20)
+creditLabel.Text = "Made by @Mask (@holyweeds)"
+creditLabel.BackgroundTransparency = 1
+creditLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+creditLabel.Font = Enum.Font.SourceSansItalic
+creditLabel.TextSize = 14
+creditLabel.TextXAlignment = Enum.TextXAlignment.Right
+creditLabel.Parent = mainFrame
+
+-- Confirmation popup
+local confirmFrame = Instance.new("Frame")
+confirmFrame.Size = UDim2.new(0, 240, 0, 100)
+confirmFrame.Position = UDim2.new(0.5, -120, 0.5, -50)
+confirmFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+confirmFrame.BorderSizePixel = 0
+confirmFrame.Visible = false
+confirmFrame.Parent = screenGui
+
+local confirmText = Instance.new("TextLabel")
+confirmText.Size = UDim2.new(1, -20, 0, 40)
+confirmText.Position = UDim2.new(0, 10, 0, 10)
+confirmText.Text = "You are already in a valid server. Hop anyway?"
+confirmText.BackgroundTransparency = 1
+confirmText.TextColor3 = Color3.new(1, 1, 1)
+confirmText.Font = Enum.Font.SourceSansBold
+confirmText.TextSize = 16
+confirmText.TextWrapped = true
+confirmText.Parent = confirmFrame
+
+local yesButton = Instance.new("TextButton")
+yesButton.Size = UDim2.new(0, 80, 0, 30)
+yesButton.Position = UDim2.new(0, 20, 1, -40)
+yesButton.Text = "Yes"
+yesButton.BackgroundColor3 = Color3.fromRGB(60, 160, 60)
+yesButton.TextColor3 = Color3.new(1, 1, 1)
+yesButton.Font = Enum.Font.SourceSansBold
+yesButton.TextSize = 16
+yesButton.Parent = confirmFrame
+
+local cancelButton = Instance.new("TextButton")
+cancelButton.Size = UDim2.new(0, 80, 0, 30)
+cancelButton.Position = UDim2.new(1, -100, 1, -40)
+cancelButton.Text = "Cancel"
+cancelButton.BackgroundColor3 = Color3.fromRGB(160, 60, 60)
+cancelButton.TextColor3 = Color3.new(1, 1, 1)
+cancelButton.Font = Enum.Font.SourceSansBold
+cancelButton.TextSize = 16
+cancelButton.Parent = confirmFrame
+
+-- Version update function
+local function updateVersionLabel()
+    versionLabel.Text = "Current PlaceVersion: " .. game.PlaceVersion
+end
+
+-- Toggle button
+local isVisible = true
+toggleButton.MouseButton1Click:Connect(function()
+    isVisible = not isVisible
+    hopButton.Visible = isVisible
+    toggleButton.Text = isVisible and "Hide Panel" or "Show Panel"
+end)
+
+closeButton.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+-- Server fetching logic
+local function getServerList()
+    local servers = {}
+    local nextPageCursor = ""
+
+    repeat
+        local url = string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100%s",
+            PlaceId, nextPageCursor ~= "" and "&cursor=" .. nextPageCursor or "")
+
+        local success, result = pcall(function()
+            return HttpService:JSONDecode(game:HttpGet(url))
+        end)
+
+        if success and result and result.data then
+            for _, server in ipairs(result.data) do
+                if server.id ~= game.JobId and not TriedServerIds[server.id] and server.playing < server.maxPlayers then
+                    table.insert(servers, server.id)
+                end
+            end
+            nextPageCursor = result.nextPageCursor or ""
+        else
+            warn("⚠️ Failed to get server list.", result)
+            task.wait(2)
+        end
+    until nextPageCursor == "" or #servers > 0
+
+    return servers
+end
+
+-- Server hop
+local function hopToServer()
+    while true do
+        local servers = getServerList()
+        if #servers == 0 then
+            warn("❌ No servers available, retrying...")
+            task.wait(3)
+        else
+            for _, serverId in ipairs(servers) do
+                TriedServerIds[serverId] = true
+                print("🔁 Trying server:", serverId)
+                local success, err = pcall(function()
+                    TeleportService:TeleportToPlaceInstance(PlaceId, serverId, LocalPlayer, {
+                        [TeleportDataKey] = true
+                    })
+                end)
+                if not success then
+                    warn("❌ Teleport failed:", err)
+                end
+                return
+            end
+        end
+    end
+end
+
+-- Hop button
+hopButton.MouseButton1Click:Connect(function()
+    updateVersionLabel()
+    if game.PlaceVersion <= MaxVersion then
+        confirmFrame.Visible = true
+    else
+        hopToServer()
+    end
+end)
+
+-- Confirmation
+yesButton.MouseButton1Click:Connect(function()
+    confirmFrame.Visible = false
+    hopToServer()
+end)
+
+cancelButton.MouseButton1Click:Connect(function()
+    confirmFrame.Visible = false
+end)
+
+-- Handle teleport failures
+TeleportService.TeleportFailed:Connect(function(player, teleportResult)
+    if teleportResult == Enum.TeleportError.Failed then
+        warn("❌ Teleportation failed. Attempting again...")
+        task.wait(5)
+        if game.PlaceVersion > MaxVersion then
+            print("Server version is not valid, hopping again...")
+            hopToServer()  -- Retry hopping to another server
+        end
+    end
+end)
